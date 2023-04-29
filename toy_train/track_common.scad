@@ -82,6 +82,17 @@ function connector_extension(kind, node) =
         )
     );
 
+// Bevel styles for the track profile
+// NOTE: these appear to be reversed for linear extrudes, which is probably a bug in path_extrude.
+BEVEL_FULL = 0;
+BEVEL_LEFT = 1;
+BEVEL_RIGHT = 2;
+BEVEL_NONE = 3;
+function bevel_left(style) =
+    style == BEVEL_FULL || style == BEVEL_LEFT;
+function bevel_right(style) =
+    style == BEVEL_FULL || style == BEVEL_RIGHT;
+
 // we need to figure out how far away the head of the connector is from the
 // neck. pythagorean formula in use here... point A = center of the end of the
 // connector neck facing the head point B = center of the connector head circle
@@ -111,28 +122,42 @@ function rail_groove(l, m) =
             [ x, y + b ],
         ];
 
-function profile_verts() =
+function profile_verts(bevel=BEVEL_FULL) =
     let(
         b = Track_Bevel,
-        left_wall = [
-            [b, 0],
-            [0, b],
-            [0, Track_Height - b],
-            [b, Track_Height],
-        ],
-        right_wall = [
-            [Track_Width - b, Track_Height],
-            [Track_Width, Track_Height - b],
-            [Track_Width, b],
-            [Track_Width - b, 0]
-        ]
+        left_wall = (
+            bevel_left(bevel) ?
+            [
+                [b, 0],
+                [0, b],
+                [0, Track_Height - b],
+                [b, Track_Height],
+            ] :
+            [
+                [0, 0],
+                [0, Track_Height],
+            ]
+        ),
+        right_wall = (
+            bevel_right(bevel) ?
+            [
+                [Track_Width - b, Track_Height],
+                [Track_Width, Track_Height - b],
+                [Track_Width, b],
+                [Track_Width - b, 0]
+            ] :
+            [
+                [Track_Width, Track_Height],
+                [Track_Width, 0],
+            ]
+        )
     )
         concat(left_wall, right_wall);
 
 // returns the positive geometry of the 2-dimensional track profile
-module track_profile() {
+module track_profile(bevel=BEVEL_FULL) {
     translate([ -Track_Width / 2, -Track_Height / 2, 0 ])
-        polygon(profile_verts());
+        polygon(profile_verts(bevel));
 }
 
 // returns the negative groove geometry of the 2-dimensional track profile
@@ -238,16 +263,22 @@ module make_connector(kind = FEMALE) {
     }
 }
 
-// targets is a list of tuples [connector_type, path]
-module multi_track(targets, near = FEMALE, only_top_grooves=false) {
+// targets is a list of tuples [connector_type, path, bevel_style]
+// bevel_style is optional
+module multi_track(targets, near=FEMALE, only_top_grooves=false) {
     difference() {
         // add the track profile, extruded along the path
         for (target = targets) {
             far = target[0];
             path = target[1];
-            path_extrude(path, begin_extra = connector_extension(near, path[0]),
-                                     end_extra = connector_extension(far, getvec(path, -1)))
-                    track_profile();
+            bevel_style = (len(target) > 2 ? target[2] : BEVEL_FULL);
+            echo(bevel_style);
+            path_extrude(
+                path,
+                begin_extra = connector_extension(near, path[0]),
+                end_extra = connector_extension(far, getvec(path, -1))
+            )
+                track_profile(bevel_style);
         }
         // subtract the near and far connector
         make_connector(near);
@@ -255,15 +286,18 @@ module multi_track(targets, near = FEMALE, only_top_grooves=false) {
             far = target[0];
             path = target[1];
             // subtract the track grooves along the whole path
-            path_extrude(path, begin_extra = 2, end_extra = 2) track_grooves(only_top_grooves);
-            path_transform(path) rotate([ 0, 0, 180 ]) make_connector(far);
+            path_extrude(path, begin_extra = 2, end_extra = 2)
+                track_grooves(only_top_grooves);
+            path_transform(path)
+                rotate([ 0, 0, 180 ])
+                make_connector(far);
         }
     }
 }
 
-module simple_track(path, near = FEMALE, far = MALE, only_top_grooves=false) {
+module simple_track(path, near=FEMALE, far=MALE, only_top_grooves=false, bevel=BEVEL_FULL) {
     multi_track([
-        [far, path]
+        [far, path, bevel]
     ], near, only_top_grooves);
 }
 
