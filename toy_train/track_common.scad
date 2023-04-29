@@ -235,6 +235,12 @@ module multi_track(targets, near = FEMALE, only_top_grooves=false) {
   }
 }
 
+module simple_track(path, near = FEMALE, far = MALE, only_top_grooves=false) {
+    multi_track([
+        [far, path]
+    ], near, only_top_grooves);
+}
+
 module flip_track(length=Medium_Length) {
     rotate([0, 0, 180])
         translate([0, -length, 0])

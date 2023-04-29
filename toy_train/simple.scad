@@ -1,11 +1,5 @@
 include <track_common.scad>
 
-module simple_track(path, near = FEMALE, far = MALE, only_top_grooves=false) {
-    multi_track([
-        [far, path]
-    ], near, only_top_grooves);
-}
-
 module simple_tracks() {
     // Simple Tracks
     distribute([50, 0, 0]) {
