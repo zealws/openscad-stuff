@@ -71,11 +71,16 @@ function curve_sweep(radius) = Male_Connector_Length * 360 / (2 * PI * radius);
 
 FEMALE = 0;
 MALE = 1;
-function connector_extension(kind, node) = (kind == FEMALE
-                                                ? 0
-                                                : (node[0] == 0
-                                                       ? Male_Connector_Length
-                                                       : curve_sweep(node[1])));
+function connector_extension(kind, node) =
+    (
+        kind == FEMALE ?
+        0 :
+        (
+            node[0] == 0 ?
+            Male_Connector_Length :
+            curve_sweep(node[1])
+        )
+    );
 
 // we need to figure out how far away the head of the connector is from the
 // neck. pythagorean formula in use here... point A = center of the end of the
@@ -89,108 +94,129 @@ _ab = sqrt((Male_Connector_Diameter / 2) ^ 2 - (Male_Neck_Width / 2) ^ 2);
 Male_Connector_Offset = Connector_Neck_Length + _ab;
 Female_Connector_Offset = Connector_Neck_Length + _ab - 1;
 
-function rail_groove(l, m) = let(
-    x = Track_Width / 2 + (l ? -Rail_Spacing : Rail_Spacing) / 2 -
-        Rail_Width / 2,
-    y = m ? Track_Height : 0,
-    trap_offset = Rail_Width * (1 - Rail_Trapezoid) / 2,
-    rail_y_depth = m ? -Rail_Depth : Rail_Depth,
-    b = m ? 1
-          : -1)[[ x, y ], [ x + trap_offset, y + rail_y_depth ],
-                [ x + Rail_Width - trap_offset, y + rail_y_depth ],
-                [ x + Rail_Width, y ], [ x + Rail_Width, y + b ], [ x, y + b ],
-];
+function rail_groove(l, m) =
+    let(
+        x = Track_Width / 2 + (l ? -Rail_Spacing : Rail_Spacing) / 2 - Rail_Width / 2,
+        y = m ? Track_Height : 0,
+        trap_offset = Rail_Width * (1 - Rail_Trapezoid) / 2,
+        rail_y_depth = m ? -Rail_Depth : Rail_Depth,
+        b = m ? 1 : -1
+    )
+        [
+            [ x, y ],
+            [ x + trap_offset, y + rail_y_depth ],
+            [ x + Rail_Width - trap_offset, y + rail_y_depth ],
+            [ x + Rail_Width, y ],
+            [ x + Rail_Width, y + b ],
+            [ x, y + b ],
+        ];
 
 function profile_verts() =
-    let(b = Track_Bevel,
-        left_wall = [[b, 0], [0, b], [0, Track_Height - b], [b, Track_Height]],
-        right_wall = [[Track_Width - b, Track_Height],
-                      [Track_Width, Track_Height - b], [Track_Width, b],
-                      [Track_Width - b, 0]]) concat(left_wall, right_wall);
+    let(
+        b = Track_Bevel,
+        left_wall = [
+            [b, 0],
+            [0, b],
+            [0, Track_Height - b],
+            [b, Track_Height],
+        ],
+        right_wall = [
+            [Track_Width - b, Track_Height],
+            [Track_Width, Track_Height - b],
+            [Track_Width, b],
+            [Track_Width - b, 0]
+        ]
+    )
+        concat(left_wall, right_wall);
 
 // returns the positive geometry of the 2-dimensional track profile
 module track_profile() {
-  translate([ -Track_Width / 2, -Track_Height / 2, 0 ])
-      polygon(profile_verts());
+    translate([ -Track_Width / 2, -Track_Height / 2, 0 ])
+        polygon(profile_verts());
 }
 
 // returns the negative groove geometry of the 2-dimensional track profile
 // the profile will will be flat on the X-Y plane, with the bottom center at
 // the origin.
 module track_grooves(only_top_grooves) {
-  translate([ -Track_Width / 2, -Track_Height / 2, 0 ]) {
-    polygon(rail_groove(true, true));
-    polygon(rail_groove(false, true));
-    if (!only_top_grooves) {
-        polygon(rail_groove(false, false));
-        polygon(rail_groove(true, false));
+    translate([ -Track_Width / 2, -Track_Height / 2, 0 ]) {
+        polygon(rail_groove(true, true));
+        polygon(rail_groove(false, true));
+        if (!only_top_grooves) {
+            polygon(rail_groove(false, false));
+            polygon(rail_groove(true, false));
+        }
     }
-  }
 }
 
 module bare_connector(d, w, o, buffer = 1, bevel = 0) {
-  // d is the diameter of the head
-  // w is the width of the neck
-  // o is the offset of the neck
-  // buffer is the extra padding to add around the interfaces of the model
-  // bevel is how much to bevel the connector by
-  if (bevel == 0) {
-    // connector head
-    translate([ 0, o, -buffer ]) cylinder(h = Track_Height + 2 * buffer, d = d);
-    // connector neck
-    translate([ -w / 2, -buffer, -buffer ]) cube(
-        [ w, Connector_Neck_Length + 2 * buffer, Track_Height + 2 * buffer ]);
-  } else {
-    // connector head
-    translate([ 0, o, 0 ]) {
-      // bottom
-      hull() {
-        translate([ 0, 0, -buffer ]) cylinder(h = buffer, d = d + 2 * bevel);
-        cylinder(h = bevel, d = d);
-      }
-      // top
-      hull() {
-        translate([ 0, 0, Track_Height ])
-            cylinder(h = buffer, d = d + 2 * bevel);
-        translate([ 0, 0, Track_Height - bevel ]) cylinder(h = buffer, d = d);
-      }
-      // middle
-      cylinder(h = Track_Height, d = d);
+    // d is the diameter of the head
+    // w is the width of the neck
+    // o is the offset of the neck
+    // buffer is the extra padding to add around the interfaces of the model
+    // bevel is how much to bevel the connector by
+    if (bevel == 0) {
+        // connector head
+        translate([ 0, o, -buffer ]) cylinder(h = Track_Height + 2 * buffer, d = d);
+        // connector neck
+        translate([ -w / 2, -buffer, -buffer ]) cube(
+                [ w, Connector_Neck_Length + 2 * buffer, Track_Height + 2 * buffer ]);
+    } else {
+        // connector head
+        translate([ 0, o, 0 ]) {
+            // bottom
+            hull() {
+                translate([ 0, 0, -buffer ]) cylinder(h = buffer, d = d + 2 * bevel);
+                cylinder(h = bevel, d = d);
+            }
+            // top
+            hull() {
+                translate([ 0, 0, Track_Height ])
+                        cylinder(h = buffer, d = d + 2 * bevel);
+                translate([ 0, 0, Track_Height - bevel ]) cylinder(h = buffer, d = d);
+            }
+            // middle
+            cylinder(h = Track_Height, d = d);
+        }
+        // connector neck
+        translate([ -w / 2, 0, 0 ]) {
+            // bottom
+            hull() {
+                translate([ -bevel, -buffer, -buffer ])
+                        cube([ w + 2 * bevel, Connector_Neck_Length + 2 * buffer, buffer ]);
+                translate([ 0, -buffer, 0 ])
+                        cube([ w, Connector_Neck_Length + 2 * buffer, bevel ]);
+            }
+            // top
+            hull() {
+                translate([ -bevel, -buffer, Track_Height ])
+                        cube([ w + 2 * bevel, Connector_Neck_Length + 2 * buffer, buffer ]);
+                translate([ 0, -buffer, Track_Height - bevel ])
+                        cube([ w, Connector_Neck_Length + 2 * buffer, bevel ]);
+            }
+            // middle
+            translate([ 0, -buffer, 0 ])
+                    cube([ w, Connector_Neck_Length + 2 * buffer, Track_Height ]);
+        }
     }
-    // connector neck
-    translate([ -w / 2, 0, 0 ]) {
-      // bottom
-      hull() {
-        translate([ -bevel, -buffer, -buffer ])
-            cube([ w + 2 * bevel, Connector_Neck_Length + 2 * buffer, buffer ]);
-        translate([ 0, -buffer, 0 ])
-            cube([ w, Connector_Neck_Length + 2 * buffer, bevel ]);
-      }
-      // top
-      hull() {
-        translate([ -bevel, -buffer, Track_Height ])
-            cube([ w + 2 * bevel, Connector_Neck_Length + 2 * buffer, buffer ]);
-        translate([ 0, -buffer, Track_Height - bevel ])
-            cube([ w, Connector_Neck_Length + 2 * buffer, bevel ]);
-      }
-      // middle
-      translate([ 0, -buffer, 0 ])
-          cube([ w, Connector_Neck_Length + 2 * buffer, Track_Height ]);
-    }
-  }
 }
 
 module male_conn_negative() {
-  // need enough buffer space to cover straight track clipping issues,
-  // but also curved tracks which might curve out to one side or another
-  length = Connector_Neck_Length + Male_Connector_Diameter + 20;
-  difference() {
-    rotate([ 0, 0, 180 ]) translate([ -Track_Width / 2 - 5, 0, -10 ])
-        cube([ Track_Width + 10, length, Track_Height + 20 ]);
-    rotate([ 0, 0, 180 ])
-        bare_connector(d = Male_Connector_Diameter, w = Male_Neck_Width,
-                       o = Male_Connector_Offset, buffer = 2);
-  }
+    // need enough buffer space to cover straight track clipping issues,
+    // but also curved tracks which might curve out to one side or another
+    length = Connector_Neck_Length + Male_Connector_Diameter + 20;
+    difference() {
+        rotate([ 0, 0, 180 ])
+            translate([ -Track_Width / 2 - 5, 0, -10 ])
+            cube([ Track_Width + 10, length, Track_Height + 20 ]);
+        rotate([ 0, 0, 180 ])
+            bare_connector(
+                d = Male_Connector_Diameter,
+                w = Male_Neck_Width,
+                o = Male_Connector_Offset,
+                buffer = 2
+            );
+    }
 }
 
 module female_conn_negative() {
@@ -204,35 +230,35 @@ module female_conn_negative() {
 }
 
 module make_connector(kind = FEMALE) {
-  translate([ 0, 0, -Track_Height / 2 ]) if (kind == MALE) {
-    male_conn_negative();
-  }
-  else {
-    female_conn_negative();
-  }
+    translate([ 0, 0, -Track_Height / 2 ]) if (kind == MALE) {
+        male_conn_negative();
+    }
+    else {
+        female_conn_negative();
+    }
 }
 
 // targets is a list of tuples [connector_type, path]
 module multi_track(targets, near = FEMALE, only_top_grooves=false) {
-  difference() {
-    // add the track profile, extruded along the path
-    for (target = targets) {
-      far = target[0];
-      path = target[1];
-      path_extrude(path, begin_extra = connector_extension(near, path[0]),
-                   end_extra = connector_extension(far, getvec(path, -1)))
-          track_profile();
+    difference() {
+        // add the track profile, extruded along the path
+        for (target = targets) {
+            far = target[0];
+            path = target[1];
+            path_extrude(path, begin_extra = connector_extension(near, path[0]),
+                                     end_extra = connector_extension(far, getvec(path, -1)))
+                    track_profile();
+        }
+        // subtract the near and far connector
+        make_connector(near);
+        for (target = targets) {
+            far = target[0];
+            path = target[1];
+            // subtract the track grooves along the whole path
+            path_extrude(path, begin_extra = 2, end_extra = 2) track_grooves(only_top_grooves);
+            path_transform(path) rotate([ 0, 0, 180 ]) make_connector(far);
+        }
     }
-    // subtract the near and far connector
-    make_connector(near);
-    for (target = targets) {
-      far = target[0];
-      path = target[1];
-      // subtract the track grooves along the whole path
-      path_extrude(path, begin_extra = 2, end_extra = 2) track_grooves(only_top_grooves);
-      path_transform(path) rotate([ 0, 0, 180 ]) make_connector(far);
-    }
-  }
 }
 
 module simple_track(path, near = FEMALE, far = MALE, only_top_grooves=false) {
