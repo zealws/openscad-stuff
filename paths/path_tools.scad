@@ -168,8 +168,9 @@ module extrude_path_node(node, index, begin_extra, end_extra) {
     }
 }
 
-// path_distribute duplicates the child geometry at every segment along the path, including at the origin.
-// No attempt is made to join, align, or hull the separate copies. This will nearly always create disjoint geometry.
+// path_distribute duplicates the child geometry at the endpoint of every path_node along the path.
+// This also places a duplicate at the origin.
+// Index is used for debugging messages, but doesn't affect the behavior.
 module path_distribute(path, index=0) {
     children();
     if (len(path) > 0) {
@@ -178,6 +179,95 @@ module path_distribute(path, index=0) {
             children();
     }
 }
+
+// place_along_path duplicates the child geometry at regular intervals along the path, including at the origin.
+// Spacing is the linear distance (along the path) between each duplicate.
+// Offset controls the spacing of the first duplicate.
+// If offset=0, the first duplicate will be placed at the origin.
+// Index is used for debugging messages, but doesn't affect the behavior.
+module place_along_path(path, spacing=10, offset=0, index=0) {
+    if (len(path) > 0) {
+        node_travel = path_node_length(path[0]);
+        num_els = num_elements_along_node(path[0], spacing, offset);
+        travel_all_els = offset + spacing * (num_els-1); // subtract 1 because the first element is at the origin
+        remaining_offset = spacing - (node_travel - travel_all_els);
+        echo("place_along_path", path=path, spacing=spacing, offset=offset, index=index);
+        echo("place_along_path", node_travel=node_travel, num_els=num_els, travel_all_els=travel_all_els, remaining_offset=remaining_offset);
+
+        place_along_path_node(path[0], spacing, offset, index)
+            children();
+
+        transform_path_node(node=path[0], index=index)
+            place_along_path(subvec(path,1), spacing, remaining_offset, index+1)
+            children();
+    }
+}
+
+function num_elements_along_node(node, spacing, offset) =
+    ceil((path_node_length(node) - offset) / spacing);
+
+
+module place_along_path_node(node, spacing=10, offset=0, index=0) {
+    angle = node[0];
+    dist = node[1];
+    orientation = (angle == 0 ? [0,0,0] : node[2]);
+    node_travel = path_node_length(node);
+    num_copies = num_elements_along_node(node, spacing, offset);
+    echo("place_along_path_node", node=node, spacing=spacing, offset=offset, node_travel=node_travel, num_copies=num_copies);
+
+    // if the path node is a rotation, we need to offset it prior to the rotation, and transform it back to the origin after the rotation
+    // this is a global transform that gets applied to every child.
+    transform_offset = [
+        orientation == Z ? sign(angle) * dist : 0,
+        0,
+        orientation == X ? sign(-angle) * dist : 0
+    ];
+    // linear translation per unit distance 
+    trans_v= [
+        0,
+        angle == 0 || orientation == Y ? 1 : 0,
+        0,
+    ];
+    rot_v= (
+        angle == 0 ?
+        [0, 0, 0] :
+        angle / node_travel * orientation
+    );
+    function travel(i) =
+        spacing * i + offset;
+    
+    for (i = [0:num_copies-1]) {
+        translate(-transform_offset)
+            translate(travel(i) * trans_v)
+            rotate(travel(i) * rot_v)
+            translate(transform_offset)
+            children();
+    }
+}
+
+// returns the total distance traversed when travelling along this path
+function path_length(path) =
+    (
+        len(path) == 0 ?
+        0 :
+        path_node_length(path[0]) + path_length(subvec(path,1))
+    );
+
+// returns the length of the given path node
+function path_node_length(node) =
+    let (
+        angle = abs(node[0]),
+        dist = node[1],
+        orientation = node[2]
+    ) 
+        (
+            angle == 0 || orientation == Y ?
+            // linear extrude or twist about Y axis
+            dist :
+            // rotate extrude
+            // length of an arc = circumference * ratio of the full rotation the angle represents
+            (2 * PI * dist) * (angle / 360)
+        );
 
 // distribute is a helper modules which applies spacing between each of it's children
 module distribute(spacing) {
@@ -235,17 +325,17 @@ _demo_spacing = [15, 0, 0];
 module demo_simple(dist=10, angle=60) {
     distribute(_demo_spacing) {
         group() {
-            _demo_text("path_node(dist)");
+            _demo_text("path_extrude([path_node(dist)])");
             _demo_extrude([path_node(dist)]);
         }
 
         group() {
-            _demo_text("path_node(radius,angle)");
+            _demo_text("path_extrude([path_node(radius,angle)])");
             _demo_extrude([path_node(dist, angle)]);
         }
 
         group() {
-            _demo_text("path_node(radius,-angle)");
+            _demo_text("path_extrude([path_node(radius,-angle)])");
             _demo_extrude([path_node(dist, -angle)]);
         }
     }
@@ -309,17 +399,105 @@ function _demo_multisegment_path(dist=10, angle=45) =
 
 // demo_multisegment demonstrates the use of a providing many path nodes to chain together transformations.
 module demo_multisegment() {
-    _demo_text("multi-segment path");
+    _demo_text("path_extrude(multi-segment path)");
     _demo_extrude(_demo_multisegment_path());
 }
 
 // demo_path_distribute demonstrates the use of the path_distribute module.
 module demo_path_distribute() {
+    // NOTE: path_distribute is not an extrude operation, so it doesn't do the implicit 90-degree rotation
+    // of the input 2d geometry. The examples here manually rotate the input geometry by 90-degrees about the X-axis
+    // so the demos all line up. Also we rescale the input so that the individual instances are easy to distinguish.
     _demo_text("path_distribute(path)");
     path_distribute(_demo_multisegment_path())
         color("SpringGreen")
+            rotate([90, 0, 0])
+            scale([0.5, 0.5, 0.2])
             linear_extrude(1)
             _demo_proto_geometry();
+}
+
+// demo_place_along_path demonstrates the use of the place_along_path module.
+module demo_place_along_path(r=10, spacing=2, offset=0) {
+    // NOTE: place_along_path is not an extrude operation, so it doesn't do the implicit 90-degree rotation
+    // of the input 2d geometry. The examples here manually rotate the input geometry by 90-degrees about the X-axis
+    // so the demos all line up. Also we rescale the input so that the individual instances are easy to distinguish.
+    distribute(_demo_spacing) {
+        group() {
+            _demo_text("place_along_path(multi-segment path)");
+            place_along_path(_demo_multisegment_path(), spacing=spacing, offset=offset)
+                rotate([90, 0, 0])
+                color("SpringGreen")
+                scale([0.5, 0.5, 0.2])
+                _demo_proto_geometry();
+        }
+
+        group() {
+            _demo_text("place_along_path(linear)");
+            place_along_path([
+                path_node(r)
+            ], spacing=spacing, offset=offset)
+                rotate([90, 0, 0])
+                color("SpringGreen")
+                scale([0.5, 0.5, 0.2])
+                _demo_proto_geometry();
+        }
+
+        group() {
+            _demo_text("place_along_path(X-axis)");
+            place_along_path([
+                path_node(r, 90, X)
+            ], spacing=spacing, offset=offset)
+                rotate([90, 0, 0])
+                color("SpringGreen")
+                scale([0.5, 0.5, 0.2])
+                _demo_proto_geometry();
+        }
+
+        group() {
+            _demo_text("place_along_path(-X axis)");
+            place_along_path([
+                path_node(r, -90, X)
+            ], spacing=spacing, offset=offset)
+                rotate([90, 0, 0])
+                color("SpringGreen")
+                scale([0.5, 0.5, 0.2])
+                _demo_proto_geometry();
+        }
+
+        group() {
+            _demo_text("place_along_path(Y axis)");
+            place_along_path([
+                path_node(r, 90, Y)
+            ], spacing=spacing, offset=offset)
+                rotate([90, 0, 0])
+                color("SpringGreen")
+                scale([0.5, 0.5, 0.2])
+                _demo_proto_geometry();
+        }
+
+        group() {
+            _demo_text("place_along_path(Z axis)");
+            place_along_path([
+                path_node(r, 90)
+            ], spacing=spacing, offset=offset)
+                rotate([90, 0, 0])
+                color("SpringGreen")
+                scale([0.5, 0.5, 0.2])
+                _demo_proto_geometry();
+        }
+
+        group() {
+            _demo_text("place_along_path(-Z axis)");
+            place_along_path([
+                path_node(r, -90)
+            ], spacing=spacing, offset=offset)
+                rotate([90, 0, 0])
+                color("SpringGreen")
+                scale([0.5, 0.5, 0.2])
+                _demo_proto_geometry();
+        }
+    }
 }
 
 // demo_all renders all the demos
@@ -341,8 +519,11 @@ module demo_all() {
             
         translate(12 * _demo_spacing)
             demo_path_distribute();
+
+        translate(13 * _demo_spacing)
+            demo_place_along_path();
     }
 }
 
 // Uncomment this to render the demos.
-//demo_all();
+demo_all();
