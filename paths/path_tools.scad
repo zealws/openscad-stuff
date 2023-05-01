@@ -120,30 +120,31 @@ module extrude_path_node(node, index, begin_extra, end_extra) {
     angular_fn = (angle == 0 ? 0 : $fn * (360 / abs(angle)));
     if (angle == 0) {
         echo("extrude_path_node(linear)",
-        index = index,
-        node = node,
-        begin_extra = begin_extra,
-        end_extra = end_extra);
+            index = index,
+            node = node,
+            begin_extra = begin_extra,
+            end_extra = end_extra);
+        length = dist + end_extra + begin_extra;
 
-        rotate([ -90, 0, 0 ])
-            translate([ 0, 0, -begin_extra ])
-            linear_extrude(dist + end_extra + begin_extra)
-            rotate([0, 0, 180])
+        rotate([90, 0, 0])
+            translate([0, 0, begin_extra - length])
+            linear_extrude(length)
+            //rotate([0, 0, 180])
             children();
     } else if (orientation == Y) {
         // Trying to do a rotate_extrude about the Y axis is meaningless since it's
         // in the direction of motion. We interpret that path as a sort of aileron
         // roll instead, which we perform as a linear_extrude with a twist.
         echo("extrude_path_node(Y)",
-        index = index,
-        node = node,
-        begin_extra = begin_extra,
-        end_extra = end_extra);
+            index = index,
+            node = node,
+            begin_extra = begin_extra,
+            end_extra = end_extra);
+        length = dist + end_extra + begin_extra;
 
-        rotate([ -90, 0, 0 ])
-            translate([ 0, 0, -begin_extra ])
-            linear_extrude(dist + end_extra + begin_extra, twist=-angle, $fn=angular_fn * 4)
-            rotate(180 * Z)
+        rotate([90, 0, 0])
+            mirror([0, 0, 1])
+            linear_extrude(length, twist=angle, $fn=angular_fn * 4)
             children();
     } else {
         true_dist = angle < 0 ? -dist : dist;
@@ -284,17 +285,22 @@ module distribute(spacing) {
 
 // _demo_proto_geometry prepares 2d geometry for the demos 
 module _demo_proto_geometry() {
-    translate([0, -2])
+    l = 5; // length of the L legs
+    w = 1; // width of the L legs
+    a = 1.5; // offset of the arrow points
+    translate([-l/2, 0]) // center in X axis
         polygon([
-            // This is an up-arrow, which is helpful for demonstrating the orientation
-            // of the result in a way that a square or circle wouldn't.
-            [ -1, 0 ],
-            [ -1, 3 ],
-            [ -2, 3 ],
-            [ 0, 6 ],
-            [ 2, 3 ],
-            [ 1, 3 ],
-            [ 1, 0 ],
+            // This is an L-shape with arrow tips.
+            // This input geometry is useful for demonstrating the orientation of the part, and how each
+            // transform affects that orientation.
+            [0, 0],
+            [0, l],
+            [a, l-a],
+            [w, l-a],
+            [w, w],
+            [l-a, w],
+            [l-a, a],
+            [l, 0],
         ]);
 }
 
