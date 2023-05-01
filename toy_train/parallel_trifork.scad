@@ -1,4 +1,5 @@
 include <track_common.scad>
+use <parallel_fork.scad>
 
 module parallel_trifork() {
     // 3-Connector Parallel Fork Tracks
@@ -6,18 +7,34 @@ module parallel_trifork() {
     // this extra negative space causes a lot of additional extruder movement, and may cause the small piece
     // there to come unstuck, leading to print failure.
     distribute([100, 0, 0]) {
-        r1 = 139.60; a1 = 31.05;  // Values computed using SolveSpace sketch
-        flip_track()
+        flip_track() union() {
+            bevel_fill(left=true, right=true);
             multi_track([
-                [MALE, [Medium], BEVEL_NONE],
-                [MALE, [path_node(r1, a1), path_node(r1, -a1)], BEVEL_LEFT],
-                [MALE, [path_node(r1, -a1), path_node(r1, a1)], BEVEL_RIGHT],
+                [MALE, [Medium]],
+                [MALE, [
+                    path_node(parallel_radius(), parallel_angle()),
+                    path_node(parallel_radius(), -parallel_angle())
+                ]],
+                [MALE, [
+                    path_node(parallel_radius(), -parallel_angle()),
+                    path_node(parallel_radius(), parallel_angle())
+                ]],
             ]);
-        multi_track([
-            [FEMALE, [Medium], BEVEL_NONE],
-            [FEMALE, [path_node(r1, a1), path_node(r1, -a1)], BEVEL_LEFT],
-            [FEMALE, [path_node(r1, -a1), path_node(r1, a1)], BEVEL_RIGHT],
-        ], MALE);
+        }
+        union() {
+            bevel_fill(left=true, right=true);
+            multi_track([
+                [FEMALE, [Medium]],
+                [FEMALE, [
+                    path_node(parallel_radius(), parallel_angle()),
+                    path_node(parallel_radius(), -parallel_angle())
+                ]],
+                [FEMALE, [
+                    path_node(parallel_radius(), -parallel_angle()),
+                    path_node(parallel_radius(), parallel_angle())
+                ]],
+            ], MALE);
+        }
     }
 }
 

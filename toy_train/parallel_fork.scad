@@ -1,21 +1,46 @@
 include <track_common.scad>
 
+module _bevel_fill_proto(position) {
+    length = 23;
+    translate([0, position - length/2, 0])
+        cube([2 * Track_Bevel + 1, length, Track_Height], center=true);
+}
+
+// NOTE: The parallel tracks have beveled edges, like all the other tracks.
+// But in the parallel track, this creates a crease between the two edges where they're connected.
+// We fill that in using this bevel_fill module, which adds a cuboid into the space so it's filled.
+module bevel_fill(length=Medium_Length, left=false, right=false) {
+    if (left) {
+        translate([-Track_Width/2, 0, 0])
+            _bevel_fill_proto(length);
+    }
+    if (right) {
+        translate([Track_Width/2, 0, 0])
+            _bevel_fill_proto(length);
+    }
+}
+
+// Values computed using SolveSpace sketch
+function parallel_radius() = 139.60;
+function parallel_angle() = 31.05;
+
 module parallel_fork() {
     // 2-Connector Parallel Fork Tracks
-    // NOTE: we only want to bevel the outer edges, because otherwise it leaves a divet in the center.
-    // this extra negative space causes a lot of additional extruder movement, and may cause the small piece
-    // there to come unstuck, leading to print failure.
     distribute([100, 0, 0]) {
-        r1 = 139.60; a1 = 31.05;  // Values computed using SolveSpace sketch
-        flip_track()
+        flip_track() {
+            bevel_fill(left=true);
             multi_track([
-                [MALE, [Medium], BEVEL_LEFT],
-                [MALE, [path_node(r1, a1), path_node(r1, -a1)], BEVEL_LEFT],
+                [MALE, [Medium]],
+                [MALE, [path_node(parallel_radius(), parallel_angle()), path_node(parallel_radius(), -parallel_angle())]],
             ]);
-        multi_track([
-            [FEMALE, [Medium], BEVEL_LEFT],
-            [FEMALE, [path_node(r1, a1), path_node(r1, -a1)], BEVEL_LEFT],
-        ], MALE);
+        }
+        union() {
+            bevel_fill(left=true);
+            multi_track([
+                [FEMALE, [Medium]],
+                [FEMALE, [path_node(parallel_radius(), parallel_angle()), path_node(parallel_radius(), -parallel_angle())]],
+            ], MALE);
+        }
     }
 }
 

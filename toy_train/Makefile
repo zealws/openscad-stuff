@@ -10,3 +10,6 @@ all: ${PARTS}
 
 %.stl: %.scad ${COMMON}
 	openscad -o $@ $<
+
+parallel_trifork.stl: parallel_trifork.scad parallel_fork.scad ${COMMON}
+	openscad -o $@ $<
