@@ -82,12 +82,20 @@ module pattern_base(pattern="brick", depth=0.3, scale=6, line_width=0.8) {
     }
 }
 
+module pattern_inverse(depth=0.3) {
+    difference() {
+        translate([-5, -5, -depth/2])
+            cube([underside_height+10, hill_length+10, depth]);
+        pattern_base(depth=depth);
+    }
+}
+
 // orients the pattern in the right spot for the underside of the hill track
 module side_pattern(x_dir=1) {
     translate(x_dir * [Track_Width/2-Track_Bevel, 0, 0])
         translate([0, 0, underside_height])
         rotate([0, 90, 0])
-        pattern_base();
+        pattern_inverse();
 }
 
 // under_fill renders geometry beneath the track to support it.
